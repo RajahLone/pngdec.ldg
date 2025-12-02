@@ -36,9 +36,7 @@ static png_uint_32 image_rowbytes;
 static png_uint_32 frame_count;
 static png_uint_32 play_count;
 
-/* functions */
-
-const char * CDECL pngdec_get_lib_version() { return VERSION_LIB(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE); }
+/* internal functions */
 
 static void pngldg_read(png_structp png_ptr, png_bytep data, png_size_t count)
 {
@@ -51,6 +49,13 @@ static void pngldg_read(png_structp png_ptr, png_bytep data, png_size_t count)
   }
 }
 
+void *pngldg_malloc(png_struct *png_ptr, png_alloc_size_t size) { return ldg_Malloc(size); }
+void pngldg_free(png_struct *png_ptr, void *ptr) { ldg_Free(ptr); }
+
+/* functions */
+
+const char * CDECL pngdec_get_lib_version() { return VERSION_LIB(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE); }
+
 int32_t CDECL pngdec_open(png_bytep data, const int size)
 {
   buffer.data = data;
@@ -59,7 +64,8 @@ int32_t CDECL pngdec_open(png_bytep data, const int size)
 
   if (png_sig_cmp(data, 0, PNG_BYTES_TO_CHECK) == 0)
   {
-    png_ptr  = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    png_ptr  = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL, NULL, &pngldg_malloc, &pngldg_free);
+    
     info_ptr = png_create_info_struct(png_ptr);
     
     if (png_ptr && info_ptr)
