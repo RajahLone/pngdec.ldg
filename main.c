@@ -211,7 +211,7 @@ PROC LibFunc[] =
   
   {"pngdec_get_image", "int32_t pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_left, uint32_t *frame_top, uint32_t *frame_width, uint32_t *frame_height, uint32_t *delay_num, uint32_t *delay_den, uint32_t *dispose_op, uint32_t *blend_op);\n", pngdec_get_image},
 
-  {"pngdec_close", "int32_t pngdec_close(GifFileType *gif);\n", pngdec_close},
+  {"pngdec_close", "int32_t pngdec_close();\n", pngdec_close},
 
 };
 
