@@ -64,17 +64,14 @@ int32_t CDECL pngdec_open(png_bytep data, const int size)
 
   if (png_sig_cmp(data, 0, PNG_BYTES_TO_CHECK) == 0)
   {
-    png_ptr  = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL, NULL, &pngldg_malloc, &pngldg_free);
+    png_ptr  = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL, NULL, pngldg_malloc, pngldg_free);
     
     info_ptr = png_create_info_struct(png_ptr);
     
     if (png_ptr && info_ptr)
     {
-      if (setjmp(png_jmpbuf(png_ptr)))
-      {
-        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-        return PNG_ERROR;
-      }
+      if (setjmp(png_jmpbuf(png_ptr))) { png_destroy_read_struct(&png_ptr, &info_ptr, NULL); return PNG_ERROR; }
+      
       png_set_read_fn(png_ptr, &buffer, pngldg_read);
       png_set_sig_bytes(png_ptr, PNG_BYTES_TO_CHECK);
       
@@ -94,7 +91,7 @@ int32_t CDECL pngdec_read()
     png_set_strip_16(png_ptr);
     png_set_gray_to_rgb(png_ptr);
     png_set_add_alpha(png_ptr, 0xff, PNG_FILLER_AFTER);
-    //png_set_bgr(png_ptr);
+    //png_set_bgr(png_ptr); // TODO ?
     (void)png_set_interlace_handling(png_ptr);
     png_read_update_info(png_ptr, info_ptr);
     
@@ -145,7 +142,7 @@ int32_t CDECL pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_
       unsigned char   local_dispose_op = 0;
       unsigned char   local_blend_op = 0;
 
-      for (j = 0; j < image_height; j++) { rows[j] = p_frame + j * image_rowbytes; }
+      for (j = 0; j < image_height; j++) { rows[j] = p_frame + (j * image_rowbytes); }
 
       if (png_get_valid(png_ptr, info_ptr, PNG_INFO_acTL))
       {
