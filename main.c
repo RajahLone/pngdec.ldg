@@ -11,21 +11,24 @@
 #define VERSION_LIB(A,B,C) STRINGIFY(A) "." STRINGIFY(B) "." STRINGIFY(C)
 #define VERSION_LDG(A,B,C) "APNG decoder from the PNGLIB (" STRINGIFY(A) "." STRINGIFY(B) "." STRINGIFY(C) ")"
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 #define PNG_ERROR 0
 #define PNG_OK 1
 #define PNG_BYTES_TO_CHECK 8
 
 /* structures */
 
-typedef struct PngLdgBuffer {
-  uint8_t *data;
-  int size;
-  int offset;
-} PngLdgBuffer;
+typedef struct png_mem_file {
+  png_bytep data;
+  png_uint_32 size;
+  png_uint_32 offset;
+} png_mem_file;
 
 /* global variables */
 
-static PngLdgBuffer buffer;
+static png_mem_file png_mf;
 
 static png_structp png_ptr;
 static png_infop   info_ptr;
@@ -40,12 +43,16 @@ static png_uint_32 play_count;
 
 static void pngldg_read(png_structp png_ptr, png_bytep data, png_size_t count)
 {
-  PngLdgBuffer *buf = png_get_io_ptr(png_ptr);
+  png_mem_file *mf = (png_mem_file *)png_get_io_ptr(png_ptr);
   
-  if (buf->offset + count <= buf->size)
+  count = MIN(count, mf->size - mf->offset);
+  
+  if (count < 1) { return; }
+  
+  if (mf->offset + count <= mf->size)
   {
-    memcpy(data, buf->data + buf->offset, count);
-    buf->offset += count;
+    memcpy(data, mf->data + mf->offset, count);
+    mf->offset += count;
   }
 }
 
@@ -56,23 +63,23 @@ void pngldg_free(png_struct *png_ptr, void *ptr) { ldg_Free(ptr); }
 
 const char * CDECL pngdec_get_lib_version() { return VERSION_LIB(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE); }
 
-int32_t CDECL pngdec_open(png_bytep data, const int size)
+int32_t CDECL pngdec_open(png_bytep data, png_uint_32 size)
 {
-  buffer.data = data;
-  buffer.size = size;
-  buffer.offset = 0;
+  png_mf.data = data;
+  png_mf.size = size;
+  png_mf.offset = 0;
 
   if (png_sig_cmp(data, 0, PNG_BYTES_TO_CHECK) == 0)
   {
-    png_ptr  = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL, NULL, pngldg_malloc, pngldg_free);
-    
+    png_ptr = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL, NULL, pngldg_malloc, pngldg_free);
+
     info_ptr = png_create_info_struct(png_ptr);
-    
+
     if (png_ptr && info_ptr)
     {
       if (setjmp(png_jmpbuf(png_ptr))) { png_destroy_read_struct(&png_ptr, &info_ptr, NULL); return PNG_ERROR; }
-      
-      png_set_read_fn(png_ptr, &buffer, pngldg_read);
+
+      png_set_read_fn(png_ptr, &png_mf, pngldg_read);
       png_set_sig_bytes(png_ptr, PNG_BYTES_TO_CHECK);
       
       return PNG_OK;
@@ -89,6 +96,7 @@ int32_t CDECL pngdec_read()
     png_read_info(png_ptr, info_ptr);
     png_set_expand(png_ptr);
     png_set_strip_16(png_ptr);
+    //png_set_expand_gray_1_2_4_to_8(png_ptr); // ?
     png_set_gray_to_rgb(png_ptr);
     png_set_add_alpha(png_ptr, 0xff, PNG_FILLER_AFTER);
     (void)png_set_interlace_handling(png_ptr);
@@ -185,9 +193,9 @@ int32_t CDECL pngdec_close()
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
   }
 
-  buffer.data = NULL;
-  buffer.size = 0;
-  buffer.offset = 0;
+  png_mf.data = NULL;
+  png_mf.size = 0;
+  png_mf.offset = 0;
   
   return PNG_OK;
 }
