@@ -28,20 +28,22 @@ typedef struct png_mem_file {
 
 /* global variables */
 
-static png_mem_file png_mf;
+png_mem_file png_mf;
+png_structp  png_read;
+png_infop    img_info;
 
-static png_structp png_ptr;
-static png_infop   info_ptr;
 static png_uint_32 image_width;
 static png_uint_32 image_height;
 static png_uint_32 image_channels;
+static png_uint_32 image_bitdepth;
+static png_uint_32 image_coltype;
 static png_uint_32 image_rowbytes;
 static png_uint_32 frame_count;
 static png_uint_32 play_count;
 
 /* internal functions */
 
-static void pngldg_read(png_structp png_ptr, png_bytep data, png_size_t count)
+static void pngldg_read(png_struct *png_ptr, png_bytep data, png_size_t count)
 {
   png_mem_file *mf = (png_mem_file *)png_get_io_ptr(png_ptr);
   
@@ -71,16 +73,15 @@ int32_t CDECL pngdec_open(png_bytep data, png_uint_32 size)
 
   if (png_sig_cmp(data, 0, PNG_BYTES_TO_CHECK) == 0)
   {
-    png_ptr = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL, NULL, pngldg_malloc, pngldg_free);
+    png_read = png_create_read_struct_2(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL, NULL, pngldg_malloc, pngldg_free);
+    img_info = png_create_info_struct(png_read);
 
-    info_ptr = png_create_info_struct(png_ptr);
-
-    if (png_ptr && info_ptr)
+    if (png_read && img_info)
     {
-      if (setjmp(png_jmpbuf(png_ptr))) { png_destroy_read_struct(&png_ptr, &info_ptr, NULL); return PNG_ERROR; }
+      if (setjmp(png_jmpbuf(png_read))) { png_destroy_read_struct(&png_read, &img_info, NULL); return PNG_ERROR; }
 
-      png_set_read_fn(png_ptr, &png_mf, pngldg_read);
-      png_set_sig_bytes(png_ptr, PNG_BYTES_TO_CHECK);
+      png_set_read_fn(png_read, &png_mf, pngldg_read);
+      // crash if png_set_sig_bytes() called
       
       return PNG_OK;
     }
@@ -91,28 +92,54 @@ int32_t CDECL pngdec_open(png_bytep data, png_uint_32 size)
 
 int32_t CDECL pngdec_read()
 {
-  if (png_ptr && info_ptr)
+  if (png_read && img_info)
   {
-    png_read_info(png_ptr, info_ptr);
-    png_set_expand(png_ptr);
-    png_set_strip_16(png_ptr);
-    //png_set_expand_gray_1_2_4_to_8(png_ptr); // ?
-    png_set_gray_to_rgb(png_ptr);
-    png_set_add_alpha(png_ptr, 0xff, PNG_FILLER_AFTER);
-    (void)png_set_interlace_handling(png_ptr);
-    png_read_update_info(png_ptr, info_ptr);
+    png_read_info(png_read, img_info);
     
-    image_width    = png_get_image_width(png_ptr, info_ptr);
-    image_height   = png_get_image_height(png_ptr, info_ptr);
-    image_channels = png_get_channels(png_ptr, info_ptr);
-    image_rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+    image_width    = png_get_image_width(png_read, img_info);
+    image_height   = png_get_image_height(png_read, img_info);
+    image_channels = png_get_channels(png_read, img_info);
+    image_bitdepth = png_get_bit_depth(png_read, img_info);
+    image_coltype  = png_get_color_type(png_read, img_info);
+          
+    if (image_bitdepth == 16)
+    {
+      png_set_scale_16(png_read);
+    }
+    if (image_coltype == PNG_COLOR_TYPE_PALETTE)
+    {
+      png_set_palette_to_rgb(png_read);
+    }
+    if (image_coltype == PNG_COLOR_TYPE_GRAY && image_bitdepth < 8)
+    {
+      png_set_expand_gray_1_2_4_to_8(png_read);
+    }
+    if (image_coltype == PNG_COLOR_TYPE_GRAY)
+    {
+      png_set_gray_to_rgb(png_read);
+    }
+    if (png_get_valid(png_read, img_info, PNG_INFO_tRNS))
+    {
+      png_set_tRNS_to_alpha(png_read);
+    }
+    if (image_coltype == PNG_COLOR_TYPE_RGB || image_coltype == PNG_COLOR_TYPE_GRAY || image_coltype == PNG_COLOR_TYPE_PALETTE)
+    {
+      png_set_filler(png_read, 0xFF, PNG_FILLER_AFTER);
+    }
+    
+    png_set_swap_alpha(png_read); // RGBA to ARGB
+
+    png_read_update_info(png_read, img_info);
+    
+    image_channels = png_get_channels(png_read, img_info);
+    image_rowbytes = png_get_rowbytes(png_read, img_info);
       
     frame_count = 1;
     play_count = 0;
     
-    if (png_get_valid(png_ptr, info_ptr, PNG_INFO_acTL))
+    if (png_get_valid(png_read, img_info, PNG_INFO_acTL))
     {
-      png_get_acTL(png_ptr, info_ptr, &frame_count, &play_count);
+      png_get_acTL(png_read, img_info, &frame_count, &play_count);
     }
     
     return PNG_OK;
@@ -133,7 +160,7 @@ int32_t CDECL pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_
   uint32_t i, j;
   png_bytepp rows;
 
-  if (png_ptr && info_ptr && (idx < frame_count))
+  if (png_read && img_info && (idx < frame_count))
   {
     rows = (png_bytepp)malloc(image_height * sizeof(png_bytep));
       
@@ -151,16 +178,16 @@ int32_t CDECL pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_
 
       for (j = 0; j < image_height; j++) { rows[j] = p_frame + (j * image_rowbytes); }
 
-      if (png_get_valid(png_ptr, info_ptr, PNG_INFO_acTL))
+      if (png_get_valid(png_read, img_info, PNG_INFO_acTL))
       {
         for (i = 0; i < frame_count; i++)
         {
           if (i == idx)
           {
-            png_read_frame_head(png_ptr, info_ptr);
-            png_get_next_frame_fcTL(png_ptr, info_ptr, frame_width, frame_height, frame_left, frame_top, &local_delay_num, &local_delay_den, &local_dispose_op, &local_blend_op);
+            png_read_frame_head(png_read, img_info);
+            png_get_next_frame_fcTL(png_read, img_info, frame_width, frame_height, frame_left, frame_top, &local_delay_num, &local_delay_den, &local_dispose_op, &local_blend_op);
           
-            png_read_image(png_ptr, rows);
+            png_read_image(png_read, rows);
           
             break;
           }
@@ -168,7 +195,7 @@ int32_t CDECL pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_
       }
       else if (idx == 0)
       {
-        png_read_image(png_ptr, rows);
+        png_read_image(png_read, rows);
       }
      
       *delay_num = local_delay_num;
@@ -187,17 +214,18 @@ int32_t CDECL pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_
 
 int32_t CDECL pngdec_close()
 {
-  if (png_ptr && info_ptr)
-  {
-    png_read_end(png_ptr, info_ptr);
-    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-  }
-
   png_mf.data = NULL;
   png_mf.size = 0;
   png_mf.offset = 0;
   
-  return PNG_OK;
+  if (png_read && img_info)
+  {
+    //png_read_end(png_read, img_info); // no need and crashy
+    png_destroy_read_struct(&png_read, &img_info, NULL);
+  
+    return PNG_OK;
+  }
+  return PNG_ERROR;
 }
 
 /* populate functions list and info for the LDG */
