@@ -38,8 +38,17 @@ static png_uint_32 image_channels;
 static png_uint_32 image_bitdepth;
 static png_uint_32 image_coltype;
 static png_uint_32 image_rowbytes;
-static png_uint_32 frame_count;
-static png_uint_32 play_count;
+static png_uint_32 frames_count;
+static png_uint_32 plays_count;
+
+static png_uint_32 frame_left;
+static png_uint_32 frame_top;
+static png_uint_32 frame_width;
+static png_uint_32 frame_height;
+static unsigned short frame_delay_num;
+static unsigned short frame_delay_den;
+static unsigned char frame_dispose;
+static unsigned char frame_blend;
 
 /* internal functions */
 
@@ -98,7 +107,6 @@ int32_t CDECL pngdec_read()
     
     image_width    = png_get_image_width(png_read, img_info);
     image_height   = png_get_image_height(png_read, img_info);
-    image_channels = png_get_channels(png_read, img_info);
     image_bitdepth = png_get_bit_depth(png_read, img_info);
     image_coltype  = png_get_color_type(png_read, img_info);
           
@@ -126,7 +134,6 @@ int32_t CDECL pngdec_read()
     {
       png_set_filler(png_read, 0xFF, PNG_FILLER_AFTER);
     }
-    
     png_set_swap_alpha(png_read); // RGBA to ARGB
 
     png_read_update_info(png_read, img_info);
@@ -134,12 +141,12 @@ int32_t CDECL pngdec_read()
     image_channels = png_get_channels(png_read, img_info);
     image_rowbytes = png_get_rowbytes(png_read, img_info);
       
-    frame_count = 1;
-    play_count = 0;
+    frames_count = 1;
+    plays_count = 0;
     
     if (png_get_valid(png_read, img_info, PNG_INFO_acTL))
     {
-      png_get_acTL(png_read, img_info, &frame_count, &play_count);
+      png_get_acTL(png_read, img_info, &frames_count, &plays_count);
     }
     
     return PNG_OK;
@@ -151,41 +158,40 @@ int32_t CDECL pngdec_read()
 uint32_t CDECL pngdec_get_width() { return (uint32_t)image_width; }
 uint32_t CDECL pngdec_get_height() { return (uint32_t)image_height; }
 uint32_t CDECL pngdec_get_channels() { return (uint32_t)image_channels; }
-uint32_t CDECL pngdec_get_raster_size() { return (uint32_t)image_height * image_rowbytes; }
-uint32_t CDECL pngdec_get_images_count() { return (uint32_t)frame_count; }
-uint32_t CDECL pngdec_get_plays_count() { return (uint32_t)play_count; }
+uint32_t CDECL pngdec_get_rowbytes() { return (uint32_t)image_rowbytes; }
+uint32_t CDECL pngdec_get_frames_count() { return (uint32_t)frames_count; }
+uint32_t CDECL pngdec_get_plays_count() { return (uint32_t)plays_count; }
 
-int32_t CDECL pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_left, uint32_t *frame_top, uint32_t *frame_width, uint32_t *frame_height, uint32_t *delay_num, uint32_t *delay_den, uint32_t *dispose_op, uint32_t *blend_op)
+int32_t CDECL pngdec_get_frame(int idx, unsigned char *p_frame)
 {
   uint32_t i, j;
   png_bytepp rows;
 
-  if (png_read && img_info && (idx < frame_count))
+  if (png_read && img_info && (idx < frames_count))
   {
+    frame_left = 0;
+    frame_top = 0;
+    frame_width = image_width;
+    frame_height = image_height;
+    frame_delay_num = 1;
+    frame_delay_den = 10;
+    frame_dispose = 0;
+    frame_blend = 0;
+
     rows = (png_bytepp)malloc(image_height * sizeof(png_bytep));
       
     if (p_frame && rows)
     {
-      *frame_left = 0;
-      *frame_top = 0;
-      *frame_width = image_width;
-      *frame_height = image_height;
- 
-      unsigned short  local_delay_num = 1;
-      unsigned short  local_delay_den = 10;
-      unsigned char   local_dispose_op = 0;
-      unsigned char   local_blend_op = 0;
-
       for (j = 0; j < image_height; j++) { rows[j] = p_frame + (j * image_rowbytes); }
 
       if (png_get_valid(png_read, img_info, PNG_INFO_acTL))
       {
-        for (i = 0; i < frame_count; i++)
+        for (i = 0; i < frames_count; i++)
         {
           if (i == idx)
           {
             png_read_frame_head(png_read, img_info);
-            png_get_next_frame_fcTL(png_read, img_info, frame_width, frame_height, frame_left, frame_top, &local_delay_num, &local_delay_den, &local_dispose_op, &local_blend_op);
+            png_get_next_frame_fcTL(png_read, img_info, &frame_width, &frame_height, &frame_left, &frame_top, &frame_delay_num, &frame_delay_den, &frame_dispose, &frame_blend);
           
             png_read_image(png_read, rows);
           
@@ -197,20 +203,28 @@ int32_t CDECL pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_
       {
         png_read_image(png_read, rows);
       }
-     
-      *delay_num = local_delay_num;
-      *delay_den = local_delay_den;
-      *dispose_op = local_dispose_op;
-      *blend_op = local_blend_op;
+      else
+      {
+        free(rows);
+        return PNG_ERROR;
+      }
       
       free(rows);
 
       return PNG_OK;
     }
   }
-      
   return PNG_ERROR;
 }
+
+uint32_t CDECL pngdec_get_frame_left() { return (uint32_t)frame_left; }
+uint32_t CDECL pngdec_get_frame_top() { return (uint32_t)frame_top; }
+uint32_t CDECL pngdec_get_frame_width() { return (uint32_t)frame_width; }
+uint32_t CDECL pngdec_get_frame_height() { return (uint32_t)frame_height; }
+uint32_t CDECL pngdec_get_frame_delay_num() { return (uint32_t)frame_delay_num; }
+uint32_t CDECL pngdec_get_frame_delay_den() { return (uint32_t)frame_delay_den; }
+uint32_t CDECL pngdec_get_frame_dispose() { return (uint32_t)frame_dispose; }
+uint32_t CDECL pngdec_get_frame_blend() { return (uint32_t)frame_blend; }
 
 int32_t CDECL pngdec_close()
 {
@@ -218,6 +232,24 @@ int32_t CDECL pngdec_close()
   png_mf.size = 0;
   png_mf.offset = 0;
   
+  image_width = 0;
+  image_height = 0;
+  image_channels = 0;
+  image_bitdepth = 0;
+  image_coltype = 0;
+  image_rowbytes = 0;
+  frames_count = 1;
+  plays_count = 0;
+
+  frame_left = 0;
+  frame_top = 0;
+  frame_width = 0;
+  frame_height = 0;
+  frame_delay_num = 1;
+  frame_delay_den = 10;
+  frame_dispose = 0;
+  frame_blend = 0;
+
   if (png_read && img_info)
   {
     //png_read_end(png_read, img_info); // no need and crashy
@@ -239,18 +271,27 @@ PROC LibFunc[] =
 
   {"pngdec_get_width", "uint32_t pngdec_get_width();\n", pngdec_get_width},
   {"pngdec_get_height", "uint32_t pngdec_get_height();\n", pngdec_get_height},
-  {"pngdec_get_raster_size", "uint32_t pngdec_get_raster_size();\n", pngdec_get_raster_size},
+  {"pngdec_get_rowbytes", "uint32_t pngdec_get_rowbytes();\n", pngdec_get_rowbytes},
   {"pngdec_get_channels", "uint32_t pngdec_get_channels();\n", pngdec_get_channels},
-  {"pngdec_get_images_count", "uint32_t pngdec_get_images_count();\n", pngdec_get_images_count},
+  {"pngdec_get_frames_count", "uint32_t pngdec_get_frames_count();\n", pngdec_get_frames_count},
   {"pngdec_get_plays_count", "uint32_t pngdec_get_plays_count();\n", pngdec_get_plays_count},
   
-  {"pngdec_get_image", "int32_t pngdec_get_image(int idx, unsigned char *p_frame, uint32_t *frame_left, uint32_t *frame_top, uint32_t *frame_width, uint32_t *frame_height, uint32_t *delay_num, uint32_t *delay_den, uint32_t *dispose_op, uint32_t *blend_op);\n", pngdec_get_image},
+  {"pngdec_get_frame", "int32_t pngdec_get_frame(int idx, unsigned char *p_frame);\n", pngdec_get_frame},
+
+  {"pngdec_get_frame_left", "uint32_t pngdec_get_frame_left();\n", pngdec_get_frame_left},
+  {"pngdec_get_frame_top", "uint32_t pngdec_get_frame_top();\n", pngdec_get_frame_top},
+  {"pngdec_get_frame_width", "uint32_t pngdec_get_frame_width();\n", pngdec_get_frame_width},
+  {"pngdec_get_frame_height", "uint32_t pngdec_get_frame_height();\n", pngdec_get_frame_height},
+  {"pngdec_get_frame_delay_num", "uint32_t pngdec_get_frame_delay_num();\n", pngdec_get_frame_delay_num},
+  {"pngdec_get_frame_delay_den", "uint32_t pngdec_get_frame_delay_den();\n", pngdec_get_frame_delay_den},
+  {"pngdec_get_frame_dispose", "uint32_t pngdec_get_frame_dispose();\n", pngdec_get_frame_dispose},
+  {"pngdec_get_frame_blend", "uint32_t pngdec_get_frame_blend();\n", pngdec_get_frame_blend},
 
   {"pngdec_close", "int32_t pngdec_close();\n", pngdec_close},
 
 };
 
-LDGLIB LibLdg[] = { { 0x0001, 11, LibFunc, VERSION_LDG(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE), 1} };
+LDGLIB LibLdg[] = { { 0x0001, 19, LibFunc, VERSION_LDG(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE), 1} };
 
 /*  */
 
