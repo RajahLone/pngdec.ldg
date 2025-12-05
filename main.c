@@ -118,12 +118,12 @@ int32_t CDECL pngdec_read()
     {
       png_set_palette_to_rgb(png_read);
     }
-    if (image_coltype == PNG_COLOR_TYPE_GRAY && image_bitdepth < 8)
+    else if (image_coltype == PNG_COLOR_TYPE_GRAY)
     {
-      png_set_expand_gray_1_2_4_to_8(png_read);
-    }
-    if (image_coltype == PNG_COLOR_TYPE_GRAY)
-    {
+      if (image_bitdepth < 8)
+      {
+        png_set_expand_gray_1_2_4_to_8(png_read);
+      }
       png_set_gray_to_rgb(png_read);
     }
     if (png_get_valid(png_read, img_info, PNG_INFO_tRNS))
@@ -132,9 +132,12 @@ int32_t CDECL pngdec_read()
     }
     if (image_coltype == PNG_COLOR_TYPE_RGB || image_coltype == PNG_COLOR_TYPE_GRAY || image_coltype == PNG_COLOR_TYPE_PALETTE)
     {
-      png_set_filler(png_read, 0xFF, PNG_FILLER_AFTER);
+      png_set_add_alpha(png_read, 0xFF, PNG_FILLER_BEFORE); // put A before RGB
     }
-    png_set_swap_alpha(png_read); // RGBA to ARGB // no effects ? had to ROR(int32, 8) in GFA code to obtain correct ARGB
+    else if (image_coltype == PNG_COLOR_TYPE_RGB_ALPHA)
+    {
+      png_set_swap_alpha(png_read); // RGBA to ARGB
+    }
     
     png_read_update_info(png_read, img_info);
 
@@ -160,6 +163,8 @@ int32_t CDECL pngdec_read()
 uint32_t CDECL pngdec_get_width() { return (uint32_t)image_width; }
 uint32_t CDECL pngdec_get_height() { return (uint32_t)image_height; }
 uint32_t CDECL pngdec_get_channels() { return (uint32_t)image_channels; }
+uint32_t CDECL pngdec_get_color_type() { return (uint32_t)image_coltype; }
+uint32_t CDECL pngdec_get_bitdepth() { return (uint32_t)image_bitdepth; }
 uint32_t CDECL pngdec_get_rowbytes() { return (uint32_t)image_rowbytes; }
 uint32_t CDECL pngdec_get_frames_count() { return (uint32_t)frames_count; }
 uint32_t CDECL pngdec_get_plays_count() { return (uint32_t)plays_count; }
@@ -273,8 +278,10 @@ PROC LibFunc[] =
 
   {"pngdec_get_width", "uint32_t pngdec_get_width();\n", pngdec_get_width},
   {"pngdec_get_height", "uint32_t pngdec_get_height();\n", pngdec_get_height},
-  {"pngdec_get_rowbytes", "uint32_t pngdec_get_rowbytes();\n", pngdec_get_rowbytes},
   {"pngdec_get_channels", "uint32_t pngdec_get_channels();\n", pngdec_get_channels},
+  {"pngdec_get_color_type", "uint32_t pngdec_get_color_type();\n", pngdec_get_color_type},
+  {"pngdec_get_bitdepth", "uint32_t pngdec_get_bitdepth();\n", pngdec_get_bitdepth},
+  {"pngdec_get_rowbytes", "uint32_t pngdec_get_rowbytes();\n", pngdec_get_rowbytes},
   {"pngdec_get_frames_count", "uint32_t pngdec_get_frames_count();\n", pngdec_get_frames_count},
   {"pngdec_get_plays_count", "uint32_t pngdec_get_plays_count();\n", pngdec_get_plays_count},
   
@@ -290,11 +297,9 @@ PROC LibFunc[] =
   {"pngdec_get_frame_blend", "uint32_t pngdec_get_frame_blend();\n", pngdec_get_frame_blend},
 
   {"pngdec_close", "int32_t pngdec_close();\n", pngdec_close},
-  
-  // TODO : errors
 };
 
-LDGLIB LibLdg[] = { { 0x0001, 19, LibFunc, VERSION_LDG(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE), 1} };
+LDGLIB LibLdg[] = { { 0x0001, 21, LibFunc, VERSION_LDG(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE), 1} };
 
 /*  */
 
