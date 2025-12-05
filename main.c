@@ -134,10 +134,12 @@ int32_t CDECL pngdec_read()
     {
       png_set_filler(png_read, 0xFF, PNG_FILLER_AFTER);
     }
-    png_set_swap_alpha(png_read); // RGBA to ARGB
-
-    png_read_update_info(png_read, img_info);
+    png_set_swap_alpha(png_read); // RGBA to ARGB // no effects ? had to ROR(int32, 8) in GFA code to obtain correct ARGB
     
+    png_read_update_info(png_read, img_info);
+
+    image_bitdepth = png_get_bit_depth(png_read, img_info);
+    image_coltype  = png_get_color_type(png_read, img_info);
     image_channels = png_get_channels(png_read, img_info);
     image_rowbytes = png_get_rowbytes(png_read, img_info);
       
@@ -178,7 +180,7 @@ int32_t CDECL pngdec_get_frame(int idx, unsigned char *p_frame)
     frame_dispose = 0;
     frame_blend = 0;
 
-    rows = (png_bytepp)malloc(image_height * sizeof(png_bytep));
+    rows = (png_bytepp)png_malloc(png_read, image_height * sizeof(png_bytep));
       
     if (p_frame && rows)
     {
@@ -205,11 +207,11 @@ int32_t CDECL pngdec_get_frame(int idx, unsigned char *p_frame)
       }
       else
       {
-        free(rows);
+        png_free(png_read, rows);
         return PNG_ERROR;
       }
       
-      free(rows);
+      png_free(png_read, rows);
 
       return PNG_OK;
     }
@@ -288,7 +290,8 @@ PROC LibFunc[] =
   {"pngdec_get_frame_blend", "uint32_t pngdec_get_frame_blend();\n", pngdec_get_frame_blend},
 
   {"pngdec_close", "int32_t pngdec_close();\n", pngdec_close},
-
+  
+  // TODO : errors
 };
 
 LDGLIB LibLdg[] = { { 0x0001, 19, LibFunc, VERSION_LDG(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE), 1} };
