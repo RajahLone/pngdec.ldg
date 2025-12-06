@@ -29,7 +29,7 @@ typedef struct png_mem_file {
 /* global variables */
 
 png_mem_file png_mf;
-png_structp  png_read;
+png_structp  png_read = NULL;
 png_infop    img_info;
 
 static png_uint_32 image_width;
@@ -74,8 +74,45 @@ void pngldg_free(png_struct *png_ptr, void *ptr) { ldg_Free(ptr); }
 
 const char * CDECL pngdec_get_lib_version() { return VERSION_LIB(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE); }
 
+int32_t CDECL pngdec_close()
+{
+  png_mf.data = NULL;
+  png_mf.size = 0;
+  png_mf.offset = 0;
+  
+  image_width = 0;
+  image_height = 0;
+  image_channels = 0;
+  image_bitdepth = 0;
+  image_coltype = 0;
+  image_rowbytes = 0;
+  frames_count = 1;
+  plays_count = 0;
+
+  frame_left = 0;
+  frame_top = 0;
+  frame_width = 0;
+  frame_height = 0;
+  frame_delay_num = 1;
+  frame_delay_den = 10;
+  frame_dispose = 0;
+  frame_blend = 0;
+
+  if (png_read && img_info)
+  {
+    //png_read_end(png_read, img_info); // no need and crashy
+    png_destroy_read_struct(&png_read, &img_info, NULL);
+  
+    png_read = NULL;
+    
+    return PNG_OK;
+  }
+  return PNG_ERROR;
+}
 int32_t CDECL pngdec_open(png_bytep data, png_uint_32 size)
 {
+  if (png_read != NULL) { pngdec_close(); }
+  
   png_mf.data = data;
   png_mf.size = size;
   png_mf.offset = 0;
@@ -101,6 +138,8 @@ int32_t CDECL pngdec_open(png_bytep data, png_uint_32 size)
 
 int32_t CDECL pngdec_read()
 {
+  if (png_read == NULL) { return PNG_ERROR; }
+
   if (png_read && img_info)
   {
     png_read_info(png_read, img_info);
@@ -160,17 +199,51 @@ int32_t CDECL pngdec_read()
   return PNG_ERROR;
 }
 
-uint32_t CDECL pngdec_get_width() { return (uint32_t)image_width; }
-uint32_t CDECL pngdec_get_height() { return (uint32_t)image_height; }
-uint32_t CDECL pngdec_get_channels() { return (uint32_t)image_channels; }
-uint32_t CDECL pngdec_get_color_type() { return (uint32_t)image_coltype; }
-uint32_t CDECL pngdec_get_bitdepth() { return (uint32_t)image_bitdepth; }
-uint32_t CDECL pngdec_get_rowbytes() { return (uint32_t)image_rowbytes; }
-uint32_t CDECL pngdec_get_frames_count() { return (uint32_t)frames_count; }
-uint32_t CDECL pngdec_get_plays_count() { return (uint32_t)plays_count; }
+uint32_t CDECL pngdec_get_width()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)image_width;
+}
+uint32_t CDECL pngdec_get_height()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)image_height;
+}
+uint32_t CDECL pngdec_get_channels()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)image_channels;
+}
+uint32_t CDECL pngdec_get_color_type()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)image_coltype;
+}
+uint32_t CDECL pngdec_get_bitdepth()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)image_bitdepth;
+}
+uint32_t CDECL pngdec_get_rowbytes()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)image_rowbytes;
+}
+uint32_t CDECL pngdec_get_frames_count()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)frames_count;
+}
+uint32_t CDECL pngdec_get_plays_count()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)plays_count;
+}
 
 int32_t CDECL pngdec_get_frame(int idx, unsigned char *p_frame)
 {
+  if (png_read == NULL) { return PNG_ERROR; }
+
   uint32_t i, j;
   png_bytepp rows;
 
@@ -224,48 +297,44 @@ int32_t CDECL pngdec_get_frame(int idx, unsigned char *p_frame)
   return PNG_ERROR;
 }
 
-uint32_t CDECL pngdec_get_frame_left() { return (uint32_t)frame_left; }
-uint32_t CDECL pngdec_get_frame_top() { return (uint32_t)frame_top; }
-uint32_t CDECL pngdec_get_frame_width() { return (uint32_t)frame_width; }
-uint32_t CDECL pngdec_get_frame_height() { return (uint32_t)frame_height; }
-uint32_t CDECL pngdec_get_frame_delay_num() { return (uint32_t)frame_delay_num; }
-uint32_t CDECL pngdec_get_frame_delay_den() { return (uint32_t)frame_delay_den; }
-uint32_t CDECL pngdec_get_frame_dispose() { return (uint32_t)frame_dispose; }
-uint32_t CDECL pngdec_get_frame_blend() { return (uint32_t)frame_blend; }
-
-int32_t CDECL pngdec_close()
+uint32_t CDECL pngdec_get_frame_left() { if (png_read == NULL) { return PNG_ERROR; }
+return (uint32_t)frame_left; }
+uint32_t CDECL pngdec_get_frame_top()
 {
-  png_mf.data = NULL;
-  png_mf.size = 0;
-  png_mf.offset = 0;
-  
-  image_width = 0;
-  image_height = 0;
-  image_channels = 0;
-  image_bitdepth = 0;
-  image_coltype = 0;
-  image_rowbytes = 0;
-  frames_count = 1;
-  plays_count = 0;
-
-  frame_left = 0;
-  frame_top = 0;
-  frame_width = 0;
-  frame_height = 0;
-  frame_delay_num = 1;
-  frame_delay_den = 10;
-  frame_dispose = 0;
-  frame_blend = 0;
-
-  if (png_read && img_info)
-  {
-    //png_read_end(png_read, img_info); // no need and crashy
-    png_destroy_read_struct(&png_read, &img_info, NULL);
-  
-    return PNG_OK;
-  }
-  return PNG_ERROR;
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)frame_top;
 }
+uint32_t CDECL pngdec_get_frame_width()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)frame_width;
+}
+uint32_t CDECL pngdec_get_frame_height()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)frame_height;
+}
+uint32_t CDECL pngdec_get_frame_delay_num()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)frame_delay_num;
+}
+uint32_t CDECL pngdec_get_frame_delay_den()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)frame_delay_den;
+}
+uint32_t CDECL pngdec_get_frame_dispose()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)frame_dispose;
+}
+uint32_t CDECL pngdec_get_frame_blend()
+{
+  if (png_read == NULL) { return PNG_ERROR; }
+  return (uint32_t)frame_blend;
+}
+
 
 /* populate functions list and info for the LDG */
 
