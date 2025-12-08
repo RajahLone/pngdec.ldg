@@ -127,7 +127,6 @@ int32_t CDECL pngdec_open(png_bytep data, png_uint_32 size)
       if (setjmp(png_jmpbuf(png_read))) { png_destroy_read_struct(&png_read, &img_info, NULL); return PNG_ERROR; }
 
       png_set_read_fn(png_read, &png_mf, pngldg_read);
-      // crash if png_set_sig_bytes() called
       
       return PNG_OK;
     }
@@ -258,7 +257,7 @@ int32_t CDECL pngdec_get_frame(int idx, unsigned char *p_frame)
     frame_dispose = 0;
     frame_blend = 0;
 
-    rows = (png_bytepp)png_malloc(png_read, image_height * sizeof(png_bytep));
+    rows = ldg_Malloc(image_height * sizeof(png_bytep));
       
     if (p_frame && rows)
     {
@@ -285,11 +284,11 @@ int32_t CDECL pngdec_get_frame(int idx, unsigned char *p_frame)
       }
       else
       {
-        png_free(png_read, rows);
+        ldg_Free(rows);
         return PNG_ERROR;
       }
       
-      png_free(png_read, rows);
+      ldg_Free(rows);
 
       return PNG_OK;
     }
