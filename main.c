@@ -367,7 +367,7 @@ PROC LibFunc[] =
   {"pngdec_close", "int32_t pngdec_close();\n", pngdec_close},
 };
 
-LDGLIB LibLdg[] = { { 0x0001, 21, LibFunc, VERSION_LDG(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE), 1} };
+LDGLIB LibLdg[] = { { 0x0002, 21, LibFunc, VERSION_LDG(PNG_LIBPNG_VER_MAJOR, PNG_LIBPNG_VER_MINOR, PNG_LIBPNG_VER_RELEASE), 1} };
 
 /*  */
 

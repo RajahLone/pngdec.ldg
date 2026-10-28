@@ -1,9 +1,11 @@
 #
 # Makefile
 #
+CMINI = libcmini/lib
+
 CFLAGS  = -Wall -O2 -fomit-frame-pointer
-LDFLAGS = -s
-LDLIBS  = -lldg -lpng -lz -lm
+LDFLAGS = -s -nostdlib $(CMINI)/crt0.o
+LDLIBS  = -L$(CMINI) -lldg -lpng -lz -lm -lcmini -lgcc -lcmini
 
 TARGET = pngdec.ldg
 
@@ -72,7 +74,7 @@ new: clean
 	$(CC) $(CFLAGS) -mcpu=5475 -c $*.c -o ./build/ColdFire/$*.o
 
 $(TARGET): $(OBJS)
-	$(CC) ./build/68000/*.o -m68000 $(LDLIBS) -o ./build/68000/$(TARGET)
-	$(CC) ./build/68020/*.o -m68020-60 $(LDLIBS) -o ./build/68020/$(TARGET)
-	$(CC) ./build/ColdFire/*.o -mcpu=5475 $(LDLIBS) -o ./build/ColdFire/$(TARGET)
+	$(CC) $(LDFLAGS) ./build/68000/*.o -o ./build/68000/$(TARGET) -m68000 $(LDLIBS)
+	$(CC) $(LDFLAGS) ./build/68020/*.o -o ./build/68020/$(TARGET) -m68020-60 $(LDLIBS)
+	$(CC) $(LDFLAGS) ./build/ColdFire/*.o  -o ./build/ColdFire/$(TARGET) -mcpu=5475 $(LDLIBS)
 
