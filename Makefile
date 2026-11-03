@@ -1,7 +1,7 @@
 #
 # Makefile
 #
-CMINI = libcmini/lib
+CMINI = ../libcmini/lib
 
 CFLAGS  = -Wall -O2 -fomit-frame-pointer
 LDFLAGS = -s -nostdlib $(CMINI)/crt0.o
